@@ -1,112 +1,71 @@
 import numpy as np
+from bokeh.plotting import figure, show
+# from bokeh.io import output_notebook
+from bokeh.palettes import Colorblind
 import pydub
 import pyaudio
-import warnings
-import sys
 import os
-from bokeh.io import show
-from bokeh.plotting import figure 
 
-# This class defines an AudioS object that stores the name of an audio track and its metadata. 
-# It also contains all the functions used to read/record/play audio, update playback rate,
-# and saving the object to file.
+# This class defines the core Guitar Effects object. 
+# It contains functions to read and write audio files.
+# It also contains all the different functions implementing various guitar effects
 
 class AudioS():
     
-    # Initializing AudioS object.
-    
-    def __init__(self, process='m'):
-        self.songname = ''
+    def __init__(self):
+        self.effectname = ''
+        self.audiofilename = ''
         self.framerate = []
-        if process == 'a':
-            self.ask_user()
-        elif process == 'm':
-            pass
-        else:
-            if input('Enter "a" for default scratching or "m" to proceed manually: ') == 'a':
-                self.ask_user()
-            else:
-                sys.exit('''Error: Incorrect entry.''')
-                
-    def ask_user(self):
-        audio_type = input('Enter "f" to read from audio file or "r" to record audio: ')
-        if audio_type == 'f':
-            filename = input('Enter the filename you want to read (excluding the extension): ')
-            self.songname = filename
-            if input('Do you want to show all plots? Enter "y" or "n": ') == 'y':
-                plot = True
-            else:
-                plot = False
-            channels, self.framerate = self.read_audiofile(plot, filename)
-
-        elif audio_type == 'r':
-            filename = input('Enter a name for the recording:')
-            if input('Do you want to show all plots? Enter "y" or "n": ') == 'y':
-                plot = True
-            else:
-                plot = False
-            channels, self.framerate = self.record_audiofile(plot, filename)
-            
-        else:
-            sys.exit('''Error: Incorrect entry. Enter "f" to read an audio file or 
-                     "r" to record''')
-            
-    # Read audio file using pydub and plot signal.
-    # The audio file has to be .mp3 format
-    def read_audiofile(self, plot, filename):
+        self.signal = []
+        self.sound = self.read_audiofile()
+        
+    def read_audiofile(self):
+        print('----------------------')
+        name = input('Enter the audio filename you want to read including the extension: ')
+        print('----------------------')
+        filename, file_ext = os.path.splitext(name)
+        filename = os.getcwd() + '/samples/' + name
+        self.audiofilename = filename
+        audiofile = pydub.AudioSegment.from_file(filename, file_ext)
+        # audiofile = audiofile.fade_out(2000)
+        # audiofile = audiofile.speedup(4.5)
+        self.framerate = audiofile.frame_rate
         songdata = []  # Empty list for holding audio data
         channels = []  # Empty list to hold data from separate channels
-        filename = os.getcwd() + '/songs/' + filename
-        audiofile = pydub.AudioSegment.from_file(filename + '.mp3')
-        self.songname = os.path.split(filename)[1]
         songdata = np.frombuffer(audiofile._data, np.int16)
         for chn in range(audiofile.channels):
             channels.append(songdata[chn::audiofile.channels])  # separate signal from channels
-        framerate = audiofile.frame_rate
-        channels = np.sum(channels, axis=0) / len(channels)  # Averaging signal over all channels
-        # Plot time signal
-        if plot:
-            p1 = figure(plot_width=900, plot_height=500, title='Audio Signal', 
-                        x_axis_label='Time (s)', y_axis_label='Amplitude (arb. units)')
-            time = np.linspace(0, len(channels)/framerate, len(channels))
-            p1.line(time[0::1000], channels[0::1000])
-            show(p1)
-        return channels, framerate
-    
-    # Record audio file using pyaudio and plot signal
-    def record_audiofile(self, plot, filename):
-        rec_time = int(input('How long do you want to record? Enter time in seconds: '))
-        start_rec = input('Do you want to start recoding? Enter "y" to start:')
-        self.songname = filename  
-        if start_rec=='y':
-            chk_size = 8192  # chunk size
-            fmt = pyaudio.paInt16  # format of audio 
-            chan = 2  # Number of channels 
-            samp_rate = 44100  # sampling rate
-            framerate = samp_rate
-            p = pyaudio.PyAudio()  # Initializing pyaudio object to open audio stream
-            astream = p.open(format=fmt, channels=chan, rate=samp_rate,
-                             input=True, frames_per_buffer=chk_size)
-            songdata = []
-            channels = []
-            channels = [[] for i in range(chan)]
-            for i in range(0, np.int(samp_rate / chk_size * rec_time)):
-                songdata = astream.read(chk_size)
-                nums = np.fromstring(songdata, dtype=np.int16)
-                for c in range(chan):
-                    channels[c].extend(nums[c::chan])
-            # Close audio stream
-            astream.stop_stream()
-            astream.close()
-            p.terminate()
+        self.signal = np.sum(channels, axis=0) / len(channels)  # Averaging signal over all channels
+        self.signal = self.norm_signal(self.signal)  # normalize signal amplitude
+        self.plot_signal([self.signal], True)
+        return audiofile
+        
+    def norm_signal(self, input_signal):
+        output_signal = input_signal / np.max(np.absolute(input_signal))
+        return output_signal
+        
+    def plot_signal(self, audio_signal, pflag):
+        if pflag:
+            p = figure(plot_width=900, plot_height=500, title='Audio Signal', 
+                       x_axis_label='Time (s)', y_axis_label='Amplitude (arb. units)')
+            time = np.linspace(0, np.shape(audio_signal)[1] / self.framerate, np.shape(audio_signal)[1])
+            m = int(np.shape(audio_signal)[1] / 2000)
+            for n in range(np.shape(audio_signal)[0]):
+                labels = 'signal ' + str(n + 1)
+                p.line(time[0::m], audio_signal[n][0::m], line_color=Colorblind[8][n], 
+                       alpha=0.6, legend_label=labels)
+            show(p)
         else:
-            sys.exit('Audio recording did not start. Start over again.')
-        channels = np.sum(channels, axis=0) / len(channels)  # Averaging signal over all channels
-        # Plot time signal
-        if plot:
-            p1 = figure(plot_width=900, plot_height=500, title='Audio Signal', 
-                        x_axis_label='Time (s)', y_axis_label='Amplitude (arb. units)')
-            time = np.linspace(0, len(channels[0])/framerate, len(channels[0]))
-            p1.line(time[0::100], channels[0][0::100])
-            show(p1)
-        return channels, framerate
+            pass
+        
+    def change_playrate(self, prate=4.5):
+        audiofile = self.sound.speedup(prate)
+        songdata = []  # Empty list for holding audio data
+        channels = []  # Empty list to hold data from separate channels
+        songdata = np.frombuffer(audiofile._data, np.int16)
+        for chn in range(audiofile.channels):
+            channels.append(songdata[chn::audiofile.channels])  # separate signal from channels
+        self.signal = np.sum(channels, axis=0) / len(channels)  # Averaging signal over all channels
+        self.signal = self.norm_signal(self.signal)  # normalize signal amplitude
+        self.plot_signal([self.signal], True)
+        
