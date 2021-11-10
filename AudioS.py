@@ -57,13 +57,13 @@ class AudioS():
         print('----------------------')
         if (scpflag == 'y'):
             M = float(input('Enter the max speed-up in a scratch (number between 1 and 10): '))
+            T = float(input('Enter where you want to insert the scratch (ms): '))
             N = int(input('Enter the number of scratches (number between 1 and 2): '))
             print('----------------------')
-        return M, N        
+        return M, T, N        
         
     def scratch_audiofile(self, aseg):
-        mult, nums = self.scratch_params()
-        tin = 100
+        mult, tin, nums = self.scratch_params()
         # converting playrate multiplier to duration of scratching
         # assuming pi/2 rotation for a scratch and 1x = 33rpm
         # also converting seconds to miliseconds
