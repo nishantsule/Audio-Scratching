@@ -51,45 +51,46 @@ class AudioS():
         p.line(time[0::m], asig[0::m], line_color=Colorblind[8][0], alpha=0.6)
         show(p)
         
-    def scratch_params(self, M=5, T=1000, N=1):
+    def scratch_params(self, M=5, N=1):
         print('----------------------')
         scpflag = input('Do you want to manually enter scratching parameters (y/n): ')
         print('----------------------')
         if (scpflag == 'y'):
             M = float(input('Enter the max speed-up in a scratch (number between 1 and 10): '))
-            T = int(input('Enter the duration of a scratch in milisecs (> 200 ms): '))
             N = int(input('Enter the number of scratches (number between 1 and 2): '))
             print('----------------------')
-        return M, T, N
-        
-        
-    # def change_playrate(self, prate=4.5):
-    #     audiofile = self.sound.speedup(prate)
-    #     songdata = []  # Empty list for holding audio data
-    #     channels = []  # Empty list to hold data from separate channels
-    #     songdata = np.frombuffer(audiofile._data, np.int16)
-    #     for chn in range(audiofile.channels):
-    #         channels.append(songdata[chn::audiofile.channels])  # separate signal from channels
-    #     self.signal = np.sum(channels, axis=0) / len(channels)  # Averaging signal over all channels
-    #     self.signal = self.norm_signal(self.signal)  # normalize signal amplitude
-    #     self.plot_signal([self.signal], True)    
+        return M, N        
         
     def scratch_audiofile(self, aseg):
-        mult, tscr, nums = self.scratch_params()
-        tin = 2000  
+        mult, nums = self.scratch_params()
+        tin = 100
+        # converting playrate multiplier to duration of scratching
+        # assuming pi/2 rotation for a scratch and 1x = 33rpm
+        # also converting seconds to miliseconds
+        tscr = np.floor(500 / mult)  
         s_before = aseg[: tin]
-        s_scr = aseg[tin : tin + tscr]
+        s_scr_o = aseg[tin : tin + tscr]
         s_after = aseg[tin + tscr :]
-        s_scr = s_scr.speedup(playback_speed=mult)
-        s_scr2 = s_scr.reverse()
-        s_scr = s_scr.append(s_scr2, crossfade=25)
-        for n in range(nums):
-            s_before = s_before.append(s_scr, crossfade=25)
-        s_new = s_before.append(s_after, crossfade=25)
+        s_scr_f = s_scr_o.speedup(playback_speed=mult, chunk_size=50, crossfade=25)
+        s_scr_r = s_scr_o.reverse()
+        s_scr_m = s_scr_f.append(s_scr_r, crossfade=25)
+        for n in range(nums-1):
+            s_scr_m = s_scr_m.append(s_scr_m, crossfade=25)
+        s_new = s_before.append(s_scr_m, crossfade=25)
+        s_new = s_new.append(s_after, crossfade=25)
         self.scratched_sound = s_new
         self.scratched_signal = self.get_audiosignal(s_new)
         self.plot_signal(s_new)
-
+        
+    def calc_fft(self, asig):
+        N = int(len(asig))
+        asig_fft = 2.0 / N * np.fft.rfft([asig])
+        apower = np.abs(asig_fft)**2
+        freqs = np.fft.rfftfreq(n=N, d=1.0/self.framerate)
+        p = figure(plot_width=900, plot_height=500, title='Audio Spectrum', 
+                   x_axis_label='Frequency (1/s)', y_axis_label='Amplitude (arb. units)')
+        p.line(freqs, np.log10(apower[0, :]), line_color=Colorblind[8][0], alpha=0.6)
+        show(p)
 
 
         
