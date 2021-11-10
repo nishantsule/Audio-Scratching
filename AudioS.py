@@ -3,7 +3,6 @@ from bokeh.plotting import figure, show
 # from bokeh.io import output_notebook
 from bokeh.palettes import Colorblind
 import pydub
-import pyaudio
 import os
 
 # This class defines the core Audio-Scratching methods. 
